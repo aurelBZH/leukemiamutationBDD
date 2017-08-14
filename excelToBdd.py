@@ -6,7 +6,7 @@ import logging
 from log import *
 
 client = MongoClient('localhost', 27017)
-db = client.pymongo_test
+db = client.testdb
 client.drop_database(db)
 
 def checkDates(sheet: xlrd.sheet.Sheet, cellTmp: int, cellNumber: int,cellLine: int) ->list:
@@ -56,6 +56,7 @@ def extract_content(file: str)->dict:
     :return:
     """
     book = xlrd.open_workbook(file , formatting_info=True)
+    color_map= book.colour_map
     sheets = book.sheet_names()
     patient= {}
     for index, sh in enumerate(sheets):
@@ -82,6 +83,7 @@ def extract_content(file: str)->dict:
                 if checkDates(sheet, cellt, cellnumber,1):
                     patient[checkDates(sheet, cellt,cellnumber,1)[0]] = checkDates(sheet, cellt,cellnumber,1)[1]
             genlist=[]
+
             for row in range (rows):
                 if re.match(r"Couverture Moy/ Amp",str(sheet.cell(row,0).value)):
                     for rownumber in range(row, row+8):
@@ -92,20 +94,29 @@ def extract_content(file: str)->dict:
                                 patient["genelist"]=genlist
 
                 if re.match(r"Résultats JSI", str(sheet.cell(row, 0).value)):
-
+                    end_mutation_col=0
                     for rownumber2 in range(row+2, rows):
-                        mutationValueList = []
                         for col in range(1,cols):
-#                            xfx = sheet.cell_xf_index(rownumber2, 1)
- #                           xf = book.xf_list[xfx]
-  #                          bgx = xf.background.pattern_colour_index
-   #                         if bgx!=64:
-
-                              #  mutationValueList.append(bgx)
-                            if sheet.cell(rownumber2,col).value!="":
+                            if re.match(r"position", str(sheet.cell(rownumber2-1, col).value)):
+                                end_mutation_col = col
+                        mutationValueList = []
+                        for col in range(1,end_mutation_col+1):
+                            if sheet.cell(rownumber2,col).value!=" " and sheet.cell(rownumber2,col).value!="":
                                 mutationValueList.append(sheet.cell(rownumber2,col).value)
-#
-                        patient[sheet.cell(rownumber2, 0).value]=mutationValueList
+                        xfx = sheet.cell_xf_index(rownumber2, 1)
+                        xf = book.xf_list[xfx]
+                        bgx = xf.background.pattern_colour_index
+                        rgb_value = color_map[bgx]
+                         #list(rgb_value)pymongo_test
+                        mutationValueList.append(rgb_value)
+
+
+
+                        logging.debug(mutationValueList)
+                        mutation_id = sheet.cell(rownumber2, 0).value +'_'+ sheet.cell(rownumber2, 1).value+'_'+sheet.cell(rownumber2, 9).value
+                        mut_id = mutation_id.replace('.', r"\U+002E")
+                        logging.debug(mut_id)
+                        patient[mut_id]=mutationValueList
 
             logging.info(patient)
             return patient
